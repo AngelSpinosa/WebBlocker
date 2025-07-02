@@ -1,0 +1,3 @@
+ECHO est� activado.
+#ignorar el archivo txt blocked_sites.txt
+blocked_sites.txt
