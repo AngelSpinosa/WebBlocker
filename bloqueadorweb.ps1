@@ -13,18 +13,36 @@ if (-not (Test-IsAdmin)) {
 }
 
 # 2. Leer y limpiar lista
-$sites = Get-Content '.\blocked_sites.txt' |
-         Where-Object { $_.Trim() -ne '' -and -not $_.Trim().StartsWith('#') }
+$rawSites = Get-Content '.\blocked_sites.txt' |
+            Where-Object { $_.Trim() -ne '' -and -not $_.Trim().StartsWith('#') }
+
+# 2.1 Detectar duplicados (case-insensitive)
+$seen = @{}
+$uniqueSites = @()
+foreach ($site in $rawSites) {
+    $normalized = $site.Trim().ToLower()
+    if ($seen.ContainsKey($normalized)) {
+        Write-Warning "El sitio '$site' ya fue añadido anteriormente. Línea duplicada ignorada."
+    } else {
+        $seen[$normalized] = $true
+        $uniqueSites += $site.Trim()
+    }
+}
+
+if ($uniqueSites.Count -eq 0) {
+    Write-Warning "La lista de sitios válidos está vacía. No se aplicaron bloqueos."
+    exit 0
+}
 
 # 3. Copia de seguridad del hosts
 $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
 $backupPath = "$hostsPath.bak_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
 Copy-Item $hostsPath $backupPath
 
-# 4. Construir nuevo contenido
+# 4. Construir nuevo contenido del archivo hosts
 $newHosts = @()
 $newHosts += "127.0.0.1 localhost"
-foreach ($site in $sites) {
+foreach ($site in $uniqueSites) {
     $newHosts += "127.0.0.1`t$site"
 }
 
@@ -35,4 +53,12 @@ $newHosts | Out-File $hostsPath -Encoding ASCII
 ipconfig /flushdns | Out-Null
 
 # 7. Resumen
-Write-Host "Bloqueados $($sites.Count) sitios. Hosts respaldado en $backupPath."
+Write-Host "`n✔ Se bloquearon $($uniqueSites.Count) sitios:`n"
+
+$i = 1
+foreach ($site in $uniqueSites) {
+    Write-Host ("{0,3}. {1}" -f $i, $site)
+    $i++
+}
+
+Write-Host "`n✔ Hosts respaldado en: $backupPath"
